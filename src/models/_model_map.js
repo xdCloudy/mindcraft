@@ -1,67 +1,40 @@
-import { promises as fs } from 'fs';
-import path from 'path';
-import { fileURLToPath, pathToFileURL } from 'url';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Dynamically discover model classes in this directory.
-// Each model class must export a static `prefix` string.
-const apiMap = await (async () => {
-    const map = {};
-    const files = (await fs.readdir(__dirname))
-        .filter(f => f.endsWith('.js') && f !== '_model_map.js' && f !== 'prompter.js');
-    for (const file of files) {
-        try {
-            const moduleUrl = pathToFileURL(path.join(__dirname, file)).href;
-            const mod = await import(moduleUrl);
-            for (const exported of Object.values(mod)) {
-                if (typeof exported === 'function' && Object.prototype.hasOwnProperty.call(exported, 'prefix')) {
-                    const prefix = exported.prefix;
-                    if (typeof prefix === 'string' && prefix.length > 0) {
-                        map[prefix] = exported;
-                    }
-                }
-            }
-        } catch (e) {
-            console.warn('Failed to load model module:', file, e?.message || e);
-        }
-    }
-    return map;
-})();
+const apiMap = {
+    'openai': (await import('./gpt.js')).GPT,
+    'gpt': (await import('./gpt.js')).GPT,
+    'azure': (await import('./azure.js')).Azure,
+    'gemini': (await import('./gemini.js')).Gemini,
+    'claude': (await import('./claude.js')).Claude,
+    'replicate': (await import('./replicate.js')).Replicate,
+    'huggingface': (await import('./huggingface.js')).HuggingFace,
+    'ollama': (await import('./ollama.js')).Ollama,
+    'groq': (await import('./groq.js')).Groq,
+    'mistral': (await import('./mistral.js')).Mistral,
+    'openrouter': (await import('./openrouter.js')).OpenRouter,
+    'glhf': (await import('./glhf.js')).GLHF,
+    'deepseek': (await import('./deepseek.js')).DeepSeek,
+    'qwen': (await import('./qwen.js')).Qwen,
+    'grok': (await import('./grok.js')).Grok,
+    'lmstudio': (await import('./lmstudio.js')).LMStudio,
+    'vllm': (await import('./vllm.js')).VLLM,
+    'hyperbolic': (await import('./hyperbolic.js')).Hyperbolic,
+    'novita': (await import('./novita.js')).Novita,
+    'cerebras': (await import('./cerebras.js')).Cerebras,
+    'mercury': (await import('./mercury.js')).Mercury,
+};
 
 export function selectAPI(profile) {
-    if (typeof profile === 'string' || profile instanceof String) {
-        profile = {model: profile};
-    }
-    // backwards compatibility with local->ollama
-    if (profile.api?.includes('local') || profile.model?.includes('local')) {
-        profile.api = 'ollama';
-        if (profile.model) {
-            profile.model = profile.model.replace('local', 'ollama');
-        }
-    }
     if (!profile.api) {
-        const api = Object.keys(apiMap).find(key => profile.model?.startsWith(key));
-        if (api) {
-            profile.api = api;
-        }
-        else {
-            // check for some common models that do not require prefixes
-            if (profile.model.includes('gpt') || profile.model.includes('o1')|| profile.model.includes('o3'))
-                profile.api = 'openai';
-            else if (profile.model.includes('claude'))
-                profile.api = 'anthropic';
-            else if (profile.model.includes('gemini'))
-                profile.api = "google";
-            else if (profile.model.includes('grok'))
-                profile.api = 'xai';
-            else if (profile.model.includes('mistral'))
-                profile.api = 'mistral';
-            else if (profile.model.includes('deepseek'))
-                profile.api = 'deepseek';
-            else if (profile.model.includes('qwen'))
-                profile.api = 'qwen';
+        if (profile.model) {
+            const slash_index = profile.model.indexOf('/');
+            if (slash_index !== -1) {
+                const prefix = profile.model.substring(0, slash_index);
+                if (apiMap[prefix]) {
+                    profile.api = prefix;
+                }
+            }
         }
         if (!profile.api) {
             throw new Error('Unknown model:', profile.model);
@@ -76,7 +49,7 @@ export function selectAPI(profile) {
 }
 
 export function createModel(profile) {
-    if (!!apiMap[profile.model]) {
+    if (apiMap[profile.model]) {
         // if the model value is an api (instead of a specific model name)
         // then set model to null so it uses the default model for that api
         profile.model = null;
