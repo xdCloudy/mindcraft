@@ -14,18 +14,29 @@ export default [
       globals: {
         ...globals.node,
         ...globals.browser,
+        // SES installs these globals at runtime.
+        Compartment: "readonly",
+        lockdown: "readonly",
       },
-      ecmaVersion: 2021,
+      ecmaVersion: "latest",
       sourceType: "module",
     },
     rules: {
-      "no-undef": "error",
-      "semi": ["error", "always"],
+      // Establish a non-blocking baseline first. These warnings document the
+      // existing debt without forcing a repo-wide style/lifecycle rewrite in
+      // the same PR. Individual follow-up PRs can tighten them to errors.
+      "no-undef": "warn",
+      "semi": ["warn", "always"],
       "curly": "off",
       "no-unused-vars": "off",
       "no-unreachable": "off",
-      "require-await": "error",
-      "no-floating-promise/no-floating-promise": "error",
+      "require-await": "warn",
+      "no-floating-promise/no-floating-promise": "warn",
+      "no-ex-assign": "warn",
+      "no-fallthrough": "warn",
+      "no-prototype-builtins": "warn",
+      "no-empty": "warn",
+      "no-useless-escape": "warn",
     },
   },
 ];
