@@ -52,3 +52,5 @@ jobs:
           git add src/models/prompter.js
           git commit -m 'fix: use writeFileSync with valid options'
           git push origin HEAD:fix/profile-snapshot-write
+
+# Nudge this workflow after initial creation so the push event is registered.
