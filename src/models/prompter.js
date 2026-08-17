@@ -50,6 +50,7 @@ export class Prompter {
         this.cooldown = this.profile.cooldown ? this.profile.cooldown : 0;
         this.last_prompt_time = 0;
         this.awaiting_coding = false;
+        this.convo_request_ids = new Map();
 
         // for backwards compatibility, move max_tokens to params
         let max_tokens = null;
@@ -211,13 +212,30 @@ export class Prompter {
         this.last_prompt_time = Date.now();
     }
 
+    _getConversationRequestKey(messages) {
+        if (!messages || messages.length === 0)
+            return 'default';
+
+        const last_message = messages[messages.length - 1];
+        if (last_message.role === 'system')
+            return 'system';
+
+        if (last_message.role === 'user') {
+            const user_match = last_message.content?.match(/^([^:\n]+):\s/);
+            return user_match ? `user:${user_match[1]}` : 'user';
+        }
+
+        return last_message.role || 'default';
+    }
+
     async promptConvo(messages) {
-        this.most_recent_msg_time = Date.now();
-        let current_msg_time = this.most_recent_msg_time;
+        const request_key = this._getConversationRequestKey(messages);
+        const request_id = (this.convo_request_ids.get(request_key) || 0) + 1;
+        this.convo_request_ids.set(request_key, request_id);
 
         for (let i = 0; i < 3; i++) { // try 3 times to avoid hallucinations
             await this.checkCooldown();
-            if (current_msg_time !== this.most_recent_msg_time) {
+            if (request_id !== this.convo_request_ids.get(request_key)) {
                 return '';
             }
 
@@ -245,8 +263,8 @@ export class Prompter {
                 continue;
             }
 
-            if (current_msg_time !== this.most_recent_msg_time) {
-                console.warn(`${this.agent.name} received new message while generating, discarding old response.`);
+            if (request_id !== this.convo_request_ids.get(request_key)) {
+                console.warn(`${this.agent.name} received a newer ${request_key} message while generating, discarding old response.`);
                 return '';
             }
 
