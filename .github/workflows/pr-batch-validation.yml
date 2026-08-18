@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - validation/pr-batch
+  pull_request:
+    branches:
+      - ce-feature
 
 permissions:
   contents: read
