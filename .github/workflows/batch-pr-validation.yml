@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   batch-pr-validation:
-    if: github.head_ref == 'ce/ci-validation-workflow'
+    if: github.head_ref == 'validation/final-pr-batch'
     runs-on: ubuntu-latest
 
     steps:
