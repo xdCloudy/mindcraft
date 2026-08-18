@@ -32,6 +32,6 @@ jobs:
           node --check settings.js
       - name: Lint (advisory until baseline is clean)
         continue-on-error: true
-        run: npm run lint
+        run: npx eslint src main.js settings.js
       - name: Test
-        run: npm test
+        run: node --test
