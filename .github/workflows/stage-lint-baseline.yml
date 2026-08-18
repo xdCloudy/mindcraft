@@ -5,6 +5,8 @@ on:
     branches: ['upstream/full-repo-lint-baseline']
     paths:
       - '.github/workflows/stage-lint-baseline.yml'
+  pull_request:
+    branches: [develop]
 
 permissions:
   contents: write
