@@ -64,7 +64,7 @@ export function createMindServer(host_public = false, port = 8080) {
             const preferred = conn?.settings?.minecraft_version;
             const candidates = [];
             if (preferred && preferred !== 'auto') candidates.push(preferred);
-            candidates.push('1.21.8');
+            candidates.push('1.21.11');
 
             // Lazy import to avoid ESM/CJS conflicts
             const mod = await import('minecraft-assets');
@@ -279,7 +279,7 @@ export function createMindServer(host_public = false, port = 8080) {
     if (host_public) {
         console.log('Public hosting not supported yet. Using localhost.');
     }
-    const host = 'localhost';
+    const host = '0.0.0.0';
     server.listen(port, host, () => {
         console.log(`MindServer running on port ${port} on host ${host}`);
     });
