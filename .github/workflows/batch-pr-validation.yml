@@ -1,3 +1,4 @@
+# Temporary batch harness; remove after validation is green.
 name: Batch PR validation
 
 on:
