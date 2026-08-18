@@ -1,0 +1,82 @@
+name: CE PR batch validation
+
+on:
+  push:
+    branches:
+      - validation/pr-batch
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: ${{ matrix.branch }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        branch:
+          - ce-feature
+          - ce/fix-output-length-handling
+          - ce/fix-reasoning-output-cleanup
+          - ce/fix-openai-api-key-alias
+          - ce/fix-place-block-item-aliases
+          - ce/fix-ses-lockdown
+          - ce/fix-action-manager-state
+          - ce/fix-command-blacklist-registry
+          - ce/fix-conversation-lifecycle
+          - ce/refactor-history-append-only
+          - ce/fix-tts-shell-injection
+          - ce/fix-startup-sequencing
+          - ce/fix-env-setting-parsing
+          - ce/fix-camera-readiness
+          - ce/fix-npc-runtime-bugs
+          - ce/fix-mindserver-state-polling
+          - ce/ci-validation-workflow
+          - ce/fix-per-agent-settings-lifecycle
+          - ce/fix-build-goal-action-results
+          - ce/fix-coder-initialization
+          - ce/refactor-lan-server-discovery
+          - ce/fix-self-prompter-lifecycle
+          - ce/refactor-profile-resolution
+
+    steps:
+      - name: Checkout branch under test
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.branch }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+
+      - name: Install dependencies
+        shell: bash
+        run: npm ci --no-audit --no-fund
+
+      - name: Syntax-check JavaScript
+        shell: bash
+        run: |
+          set -euo pipefail
+          find src -type f -name '*.js' -print0 | xargs -0 -n1 node --check
+          node --check main.js
+          node --check settings.js
+          if [[ -d tests ]]; then
+            find tests -type f -name '*.js' -print0 | xargs -0 -r -n1 node --check
+          fi
+
+      - name: Run tests when present
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          tests=(tests/*.test.js)
+          if (( ${#tests[@]} )); then
+            node --test "${tests[@]}"
+          else
+            echo 'No tests found.'
+          fi
