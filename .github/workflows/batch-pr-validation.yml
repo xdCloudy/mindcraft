@@ -65,14 +65,14 @@ jobs:
 
     steps:
       - name: Check out PR branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: xdCloudy/mindcraft-dev
           ref: ${{ matrix.branch }}
           fetch-depth: 0
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '22.13.0'
           cache: npm
@@ -101,19 +101,73 @@ jobs:
             node -e "JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'))" "$file"
           done < <(git ls-files -z -- '*.json')
 
-      - name: ESLint JavaScript changed by PR
+      - name: ESLint added and modified lines
+        id: lint
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
-          mapfile -t changed_js < <(git diff --name-only --diff-filter=ACMR upstream/develop...HEAD -- '*.js')
-          if (( ${#changed_js[@]} )); then
-            printf 'Linting %s\n' "${changed_js[@]}"
-            npx --no-install eslint "${changed_js[@]}"
-          else
-            echo 'No changed JavaScript files.'
-          fi
+          cat > "$RUNNER_TEMP/lint-changed.mjs" <<'NODE'
+          import { execFileSync } from 'node:child_process';
+          import path from 'node:path';
+          import { ESLint } from 'eslint';
+
+          const base = process.argv[2] || 'upstream/develop';
+          const diff = execFileSync(
+              'git',
+              ['diff', '--unified=0', '--diff-filter=ACMR', `${base}...HEAD`, '--', '*.js'],
+              { encoding: 'utf8' }
+          );
+
+          const rangesByFile = new Map();
+          let currentFile = null;
+          for (const line of diff.split('\n')) {
+              if (line.startsWith('+++ b/')) {
+                  currentFile = line.slice(6);
+                  if (!rangesByFile.has(currentFile)) rangesByFile.set(currentFile, []);
+                  continue;
+              }
+              if (!currentFile || !line.startsWith('@@')) continue;
+              const match = line.match(/\+(\d+)(?:,(\d+))?/);
+              if (!match) continue;
+              const start = Number(match[1]);
+              const count = match[2] === undefined ? 1 : Number(match[2]);
+              if (count > 0) rangesByFile.get(currentFile).push([start, start + count - 1]);
+          }
+
+          const files = [...rangesByFile.keys()];
+          if (files.length === 0) {
+              console.log('No changed JavaScript files.');
+              process.exit(0);
+          }
+
+          const eslint = new ESLint();
+          const results = await eslint.lintFiles(files);
+          let failures = 0;
+
+          for (const result of results) {
+              const file = path.relative(process.cwd(), result.filePath).split(path.sep).join('/');
+              const ranges = rangesByFile.get(file) || [];
+              for (const message of result.messages) {
+                  const line = message.line || 0;
+                  const touchesChangedLine = line === 0 || ranges.some(([start, end]) => line >= start && line <= end);
+                  if (!touchesChangedLine) continue;
+                  failures += 1;
+                  console.error(`${file}:${line}:${message.column || 0} ${message.ruleId || 'eslint'} ${message.message}`);
+              }
+          }
+
+          if (failures > 0) {
+              console.error(`Found ${failures} ESLint issue(s) on lines changed by this PR.`);
+              process.exit(1);
+          }
+          console.log('No ESLint issues on added or modified lines.');
+          NODE
+          node "$RUNNER_TEMP/lint-changed.mjs" upstream/develop
 
       - name: Run Node tests
+        id: tests
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
@@ -130,7 +184,29 @@ jobs:
           fi
 
       - name: Check diff whitespace
+        id: whitespace
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
           git diff --check upstream/develop...HEAD
+
+      - name: Final validation result
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          failed=0
+          if [[ '${{ steps.lint.outcome }}' != 'success' ]]; then
+            echo 'ESLint changed-lines check failed.'
+            failed=1
+          fi
+          if [[ '${{ steps.tests.outcome }}' != 'success' ]]; then
+            echo 'Node tests failed.'
+            failed=1
+          fi
+          if [[ '${{ steps.whitespace.outcome }}' != 'success' ]]; then
+            echo 'Diff whitespace check failed.'
+            failed=1
+          fi
+          exit "$failed"
