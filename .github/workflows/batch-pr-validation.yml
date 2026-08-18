@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - ci/batch-pr-validation-20260818
+  pull_request:
+    branches:
+      - develop
 
 permissions:
   contents: read
