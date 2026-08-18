@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: ['ce/**']
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      NODE_OPTIONS: --unhandled-rejections=strict
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.13.0'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Syntax-check JavaScript
+        shell: bash
+        run: |
+          set -euo pipefail
+          find src -type f -name '*.js' -print0 | xargs -0 -r -n1 node --check
+          if [ -d tests ]; then
+            find tests -type f -name '*.js' -print0 | xargs -0 -r -n1 node --check
+          fi
+          node --check main.js
+          node --check settings.js
+
+      - name: Strict lint #81 JavaScript
+        run: >-
+          npx eslint
+          src/agent/mindserver_proxy.js
+          src/mindcraft/mindcraft.js
+          src/mindcraft/mindserver.js
+          src/mindcraft/security.js
+          src/process/agent_process.js
+          tests/mindserver_auth_broadcast.test.js
+          tests/mindserver_security.test.js
+          tests/mindserver_ui_security.test.js
+
+      - name: Test
+        run: npm test
